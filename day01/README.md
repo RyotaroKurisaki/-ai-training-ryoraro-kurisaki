@@ -101,6 +101,9 @@ Hello, Taro
 
 - 追加で確認した入力例：
 - 発生したエラーと対処：
+  - Python 3.15 環境で `pip install -r requirements.txt` を実行した際、`zstandard` のインストール時にエラーが発生した。
+  - 原因として、一部ライブラリが Python 3.15 に十分対応していなかったことが考えられる。
+  - Python 3.13 をインストールし、仮想環境（`.venv`）を再作成した後に `pip install -r requirements.txt` を実行したところ、正常にインストールできた。
 
 ## 提出物
 
