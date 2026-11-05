@@ -101,6 +101,9 @@ Hello, Taro
 
 - 追加で確認した入力例：
 - 発生したエラーと対処：
+  - Python 3.15 環境で `pip install -r requirements.txt` を実行した際、`zstandard` のインストール時にエラーが発生した。
+  - 原因として、一部ライブラリが Python 3.15 に十分対応していなかったことが考えられる。
+  - Python 3.13 をインストールし、仮想環境（`.venv`）を再作成した後に `pip install -r requirements.txt` を実行したところ、正常にインストールできた。
 
 ## 提出物
 
@@ -114,12 +117,39 @@ Hello, Taro
 - 境界：`--name` に長い文字列や記号を入れても壊れない
 - 再実行：同じ入力で複数回実行しても安定して同じ結果になる
 
-## リサーチメモ（任意）
+## リサーチメモ
 
-調べたURLや、理解した要点をメモしてください。
+### Python仮想環境（venv等）
+- 仮想環境はプロジェクトごとに独立したPython実行環境を作る仕組み。
+- ライブラリのバージョン競合を防ぐことができる。
+- `python -m venv .venv` で作成し、`.\.venv\Scripts\Activate.ps1` で有効化する。
+- 仮想環境を有効化すると、そのプロジェクト専用の Python や pip が使用される。
 
-- Python仮想環境（venv等）
-- 依存管理（requirements/pyprojectの考え方）
-- CLIの引数処理（例：argparse等）
-- ログ（INFO/ERRORの使い分け）
-- GitHub：ブランチ作成→PR→修正push
+### 依存管理（requirements / pyproject の考え方）
+- プロジェクトで使用するライブラリを管理するための仕組み。
+- `requirements.txt` に必要なライブラリとバージョンを記載する。
+- `pip install -r requirements.txt` で一括インストールできる。
+- 開発メンバー全員が同じ環境を再現できるメリットがある。
+
+### CLIの引数処理（argparse等）
+- CLI（Command Line Interface）はコマンドラインから操作するアプリケーション。
+- `argparse` を利用することで、コマンドライン引数を定義・取得できる。
+- `required=True` で必須項目を設定できる。
+- `type=int` や `choices=[]` を利用して入力値の制御が可能。
+- 今回は `--name`、`--repeat`、`--format` の引数を使用した。
+
+### ログ（INFO / ERRORの使い分け）
+- ログはプログラムの動作状況を記録するために利用する。
+- `INFO` は正常な処理状況の記録に使用する。
+  - 例：実行開始時の引数情報の出力
+- `ERROR` は例外や異常終了時の記録に使用する。
+  - 例：`repeat` が範囲外の場合のエラーログ出力
+- ログを残すことで不具合調査や動作確認がしやすくなる。
+
+### GitHub：ブランチ作成→PR→修正push
+- `main` ブランチから作業用ブランチ（例：`feature/day01`）を作成する。
+- 作業内容をコミットし、GitHubへ push する。
+- PR（Pull Request）を作成し、変更内容のレビューを依頼する。
+- レビュー後に修正が必要な場合は、同じブランチで修正・コミット・push を行う。
+- 同じブランチへ push すると、PR の内容は自動的に更新される。
+- 承認後に Merge されることで、変更内容が `main` ブランチへ反映される。
