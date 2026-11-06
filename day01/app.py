@@ -6,6 +6,10 @@ import logging
 import sys
 from typing import List
 
+import json
+import boto3
+from botocore.config import Config
+
 
 def build_parser() -> argparse.ArgumentParser:
     """Day01のCLI引数を定義します。

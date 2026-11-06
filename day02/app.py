@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import sys
 from typing import List, Optional
 
+import boto3
+from botocore.config import Config
 from dotenv import load_dotenv
 
 
@@ -57,8 +60,63 @@ def invoke_bedrock(
     - 認証/権限/ネットワーク/タイムアウトなどは例外として投げてOK
      （main側で終了コード=1にしてstderrへ出ます）
     """
-    # TODO(TRAINEE): Implement Bedrock invocation and return the assistant text only.
-    raise NotImplementedError("Implement Bedrock invocation")
+    try:
+        # HTTP通信のタイムアウト設定
+        config = Config(
+            connect_timeout=timeout_sec,
+            read_timeout=timeout_sec,
+        )
+
+        # Bedrock Runtimeクライアントを作成
+        client = boto3.client(
+            "bedrock-runtime",
+            region_name=region,
+            config=config,
+        )
+
+        # Claudeに送信するリクエストを作成
+        request_body = {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ],
+        }
+
+        # Bedrock経由でClaudeを呼び出す
+        response = client.invoke_model(
+            modelId=model_id,
+            body=json.dumps(request_body),
+            contentType="application/json",
+            accept="application/json",
+        )
+
+        # レスポンスをJSONとして読み込む
+        response_body = json.loads(response["body"].read())
+
+        # 回答本文だけを取り出す
+        reply = "".join(
+            item.get("text", "")
+            for item in response_body["content"]
+            if item.get("type") == "text"
+        )
+
+        if not reply:
+            raise ValueError("Bedrock returned an empty response")
+
+        return reply
+
+    except Exception as e:
+        logging.error(
+            "Bedrock invocation failed: %s: %s",
+            type(e).__name__,
+            e,
+        )
+        raise
 
 
 def main(argv: List[str] | None = None) -> int:
