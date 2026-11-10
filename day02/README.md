@@ -133,9 +133,9 @@ python -m day02.app --prompt "短い俳句を作ってください" --temperatur
 
 ## Bedrock確認
 
-- モデル：
-- リージョン：
-- 主要パラメータ：
+- モデル：Claude Sonnet 4.5（jp.anthropic.claude-sonnet-4-5-20250929-v1:0）
+- リージョン：ap-northeast-1
+- 主要パラメータ：temperature,max_tokens,timeout_sec
 
 ## リサーチメモ（任意）
 
