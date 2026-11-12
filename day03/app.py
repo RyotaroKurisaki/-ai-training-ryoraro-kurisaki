@@ -6,6 +6,10 @@ import logging
 import sys
 from typing import Any, Dict, List
 
+import os
+import boto3
+from botocore.config import Config
+from dotenv import load_dotenv
 
 def build_parser() -> argparse.ArgumentParser:
     """Day03のCLI引数を定義します（要件文とリトライ回数）。"""
@@ -38,9 +42,103 @@ def generate_json(requirements: str) -> str:
     - 余計な前置き/後置きの文章を混ぜない
     - 壊れやすいので、プロンプトは短く・形式を固定する
     """
-    # TODO(TRAINEE): Generate a JSON string that passes validate_json().
-    raise NotImplementedError("Implement JSON generation")
+    load_dotenv()
 
+    region = os.getenv("AWS_REGION")
+    model_id = os.getenv("BEDROCK_MODEL_ID")
+
+    if not region:
+        raise ValueError("AWS_REGION is required")
+    if not model_id:
+        raise ValueError("BEDROCK_MODEL_ID is required")
+
+    prompt = f"""
+あなたは業務要件を整理するアシスタントです。
+以下の要件を分析し、指定されたJSON形式で出力してください。
+
+要件：
+{requirements}
+
+出力ルール：
+- JSONのみを出力すること。説明文やMarkdownのコードブロックは禁止。
+- titleは要件を簡潔に要約したタイトルとする。
+- tasksは作業内容を整理した配列とする。
+- 各taskにはid（連番の整数）、description、acceptance_criteriaを含める。
+- risksは想定されるリスクを格納した文字列の配列とする。
+
+出力形式：
+{{
+  "title": "タイトル",
+  "tasks": [
+    {{
+      "id": 1,
+      "description": "作業内容",
+      "acceptance_criteria": "完了条件"
+    }}
+  ],
+  "risks": [
+    "想定リスク"
+  ]
+}}
+"""
+
+    config = Config(
+        connect_timeout=30,
+        read_timeout=30,
+    )
+
+    client = boto3.client(
+        "bedrock-runtime",
+        region_name=region,
+        config=config,
+    )
+
+    request_body = {
+        "anthropic_version": "bedrock-2023-05-31",
+        "max_tokens": 1024,
+        "temperature": 0.2,
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt,
+            }
+        ],
+    }
+
+    response = client.invoke_model(
+        modelId=model_id,
+        body=json.dumps(request_body),
+        contentType="application/json",
+        accept="application/json",
+    )
+
+    raw_body = response["body"].read()
+    logging.info("Bedrock response body: %r", raw_body[:500])
+
+    response_body = json.loads(raw_body)
+
+    reply = "".join(
+        item.get("text", "")
+        for item in response_body["content"]
+        if item.get("type") == "text"
+    )
+
+    reply = reply.strip()
+
+    if reply.startswith("```"):
+        lines = reply.splitlines()
+
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+
+        reply = "\n".join(lines).strip()
+
+    logging.info("Generated JSON text: %r", reply[:500])
+
+    return reply
 
 def validate_json(text: str) -> Dict[str, Any]:
     """生成結果のJSONを検証します（必須キーと型）。"""
