@@ -5,6 +5,11 @@ import logging
 import sys
 from typing import List
 
+from datetime import date
+
+from langchain_aws import ChatBedrock
+from langchain_core.tools import tool
+from langchain_core.messages import HumanMessage
 
 def build_parser() -> argparse.ArgumentParser:
     """Day04のCLI引数を定義します（ユーザー入力テキスト）。"""
@@ -18,24 +23,115 @@ def _validate_args(args: argparse.Namespace) -> None:
     if not args.text:
         raise ValueError("--text is required")
 
+@tool
+def today() -> str:
+    """今日の日付をYYYY-MM-DD形式で取得します。"""
+    logging.info("Tool called: today")
 
+    return date.today().isoformat()
+
+def validate_tool_args(tool_call: dict) -> None:
+    """ツール名と引数を検証する。"""
+
+    if tool_call["name"] != "today":
+        raise ValueError(
+            f"Unsupported tool: {tool_call['name']}"
+        )
+
+    if tool_call.get("args", {}) != {}:
+        raise ValueError("today does not accept arguments")
+    
 def run_chain(text: str) -> str:
-    """LangChain + Tool calling を使って回答（文字列）を返します。
+    """LangChain + Tool calling を使って回答（文字列）を返します。"""
 
-    この関数を実装すると、`python -m day04.app --text ...` が動くようになります。
+    import os
+    from dotenv import load_dotenv
 
-    要件（READMEの受け入れ基準）：
-    - `today` または `add` のツールを1つ実装し、LLMから1回以上呼び出す
-    - ツール引数のバリデーションを入れる（不正なら実行しない）
-    - ツール失敗時は安全に失敗する（例外でOK。mainがexit code=1にする）
+    load_dotenv()
 
-    ヒント：
-    - まずはツールをPython関数として作り、ログで「呼ばれた」ことを確認
-    - 次にLLM側のプロンプトで「必要ならツールを使う」よう誘導
-    """
-    # TODO(TRAINEE): Implement LangChain pipeline and tool calling.
-    raise NotImplementedError("Implement LangChain + Tool calling")
+    region = os.getenv("AWS_REGION")
+    model_id = os.getenv("BEDROCK_MODEL_ID")
 
+    if not region:
+        raise ValueError("AWS_REGION is required")
+
+    if not model_id:
+        raise ValueError("BEDROCK_MODEL_ID is required")
+
+    # AWS BedrockのLLMを初期化
+    llm = ChatBedrock(
+        model_id=model_id,
+        region_name=region,
+        model_kwargs={
+            "temperature": 0.2,
+            "max_tokens": 512,
+        },
+    )
+
+    # LLMが利用できるツールを登録
+    tools = [today]
+
+    # ツールをLLMにバインド
+    llm_with_tools = llm.bind_tools(tools)
+    # ユーザーの入力をLLMに渡す
+    messages = [
+        HumanMessage(
+            content=f"""
+あなたは日付を回答するアシスタントです。
+今日の日付を聞かれた場合は、必ずtodayツールを使用してください。
+
+ユーザーの質問：
+{text}
+"""
+        )
+    ]
+
+    # LLMにツールを選択させる
+    response = llm_with_tools.invoke(messages)
+
+    # ツール呼び出しの内容を取得
+    tool_calls = response.tool_calls
+
+    if not tool_calls:
+        raise ValueError("LLM did not call any tool")
+
+    # 許可されたツールだけを実行
+    results = []
+
+    for tool_call in tool_calls:
+        if tool_call["name"] != "today":
+            raise ValueError(
+                f"Unsupported tool: {tool_call['name']}"
+            )
+
+        # todayは引数なしのため、引数があれば実行しない
+        if tool_call.get("args", {}) != {}:
+            raise ValueError("today does not accept arguments")
+
+        logging.info("Executing tool: today")
+
+        result = today.invoke({})
+        results.append(str(result))
+
+    # ツールの実行結果をLLMに渡す
+    final_messages = messages + [
+        response,
+    ]
+
+    for tool_call, result in zip(tool_calls, results):
+        from langchain_core.messages import ToolMessage
+
+        final_messages.append(
+            ToolMessage(
+                content=result,
+                tool_call_id=tool_call["id"],
+            )
+        )
+
+    # LLMに最終回答を生成させる
+    final_response = llm.invoke(final_messages)
+
+    return str(final_response.content)
 
 def main(argv: List[str] | None = None) -> int:
     """CLIのエントリポイントです。
